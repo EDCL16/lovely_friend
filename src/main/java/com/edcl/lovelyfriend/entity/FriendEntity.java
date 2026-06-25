@@ -166,7 +166,8 @@ public class FriendEntity extends PathfinderMob {
             return;
         }
         if (tryEquipWeapon(stack)) {
-            // weapon equipped, but still add old weapon to inventory if swapped
+            itemEntity.discard();
+            return;
         }
 
         ItemStack remaining = addToInventory(stack);
