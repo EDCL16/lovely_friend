@@ -362,7 +362,10 @@ public class FriendEntity extends PathfinderMob {
     @Override
     protected void readAdditionalSaveData(ValueInput input) {
         super.readAdditionalSaveData(input);
-        selectedTexture = input.getStringOr("SelectedTexture", "default");
+        selectedTexture = input.getStringOr("SelectedTexture", "");
+        if (!TEXTURES.contains(selectedTexture)) {
+            selectedTexture = TEXTURES.get(this.random.nextInt(TEXTURES.size()));
+        }
         foodLevel = input.getIntOr("FoodLevel", MAX_FOOD_LEVEL);
 
         ValueInput.ValueInputList inventoryList = input.childrenListOrEmpty("Inventory");
