@@ -2,16 +2,18 @@ package com.edcl.lovelyfriend.client;
 
 import com.edcl.lovelyfriend.entity.ModEntityTypes;
 import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.fabric.api.client.rendering.v1.EntityModelLayerRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
-import net.minecraft.client.model.PlayerModel;
+import net.fabricmc.fabric.api.client.rendering.v1.ModelLayerRegistry;
+import net.minecraft.client.model.HumanoidModel;
+import net.minecraft.client.model.geom.builders.CubeDeformation;
+import net.minecraft.client.model.geom.builders.LayerDefinition;
 
 public class LovelyFriendModClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
-        EntityModelLayerRegistry.registerModelLayer(
+        ModelLayerRegistry.registerModelLayer(
                 ModEntityModelLayers.FRIEND,
-                PlayerModel::createMesh
+                () -> LayerDefinition.create(HumanoidModel.createMesh(CubeDeformation.NONE, 0.0f), 64, 64)
         );
         EntityRendererRegistry.register(ModEntityTypes.FRIEND, FriendRenderer::new);
     }

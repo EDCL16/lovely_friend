@@ -44,7 +44,7 @@ public class CollectItemOnGroundGoal extends Goal {
         if (targetItem == null) return;
         entity.getNavigation().moveTo(targetItem, 1.0);
         if (entity.distanceToSqr(targetItem) < PICKUP_RANGE * PICKUP_RANGE) {
-            entity.pickUpItem(targetItem);
+            entity.collectItem(targetItem);
             targetItem = null;
         }
     }

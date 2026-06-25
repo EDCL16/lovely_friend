@@ -5,8 +5,7 @@ import com.edcl.lovelyfriend.entity.goal.EatFoodGoal;
 import com.edcl.lovelyfriend.entity.goal.FollowPlayerGoal;
 import com.edcl.lovelyfriend.item.ModItems;
 import net.minecraft.core.BlockPos;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.DifficultyInstance;
@@ -24,12 +23,18 @@ import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.food.FoodProperties;
-import net.minecraft.world.item.*;
-import net.minecraft.world.item.Tiers;
+import net.minecraft.world.item.AxeItem;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.ShieldItem;
+import net.minecraft.world.item.component.ItemAttributeModifiers;
+import net.minecraft.world.item.equipment.Equippable;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ServerLevelAccessor;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
+import net.minecraft.tags.ItemTags;
 
-import javax.annotation.Nullable;
+import org.jetbrains.annotations.Nullable;
 import java.util.Arrays;
 import java.util.List;
 
@@ -54,7 +59,7 @@ public class FriendEntity extends PathfinderMob {
 
     public FriendEntity(EntityType<? extends FriendEntity> entityType, Level level) {
         super(entityType, level);
-        this.setPersistenceRequired(true);
+        this.setPersistenceRequired();
     }
 
     public static AttributeSupplier.Builder createFriendAttributes() {
@@ -83,8 +88,8 @@ public class FriendEntity extends PathfinderMob {
         this.goalSelector.addGoal(8, new RandomLookAroundGoal(this));
 
         this.targetSelector.addGoal(2, new HurtByTargetGoal(this));
-        this.targetSelector.addGoal(3, new NearestAttackableTargetGoal<>(this, Monster.class, 10, true, false,
-                entity -> !(entity instanceof Creeper)));
+        this.targetSelector.addGoal(3, new NearestAttackableTargetGoal<>(this, Monster.class, 10, true, true,
+                (entity, level) -> !(entity instanceof Creeper)));
         this.targetSelector.addGoal(3, new NearestAttackableTargetGoal<>(this, Animal.class, true));
     }
 
@@ -93,7 +98,7 @@ public class FriendEntity extends PathfinderMob {
     @Override
     public void aiStep() {
         super.aiStep();
-        if (!this.level().isClientSide) {
+        if (!this.level().isClientSide()) {
             reduceHunger();
             applyHungerDamage();
         }
@@ -132,7 +137,7 @@ public class FriendEntity extends PathfinderMob {
     public ItemStack findFoodInInventory() {
         for (int i = 0; i < inventory.getContainerSize(); i++) {
             ItemStack stack = inventory.getItem(i);
-            FoodProperties food = stack.getFoodProperties(this);
+            FoodProperties food = stack.get(DataComponents.FOOD);
             if (food != null) {
                 return stack;
             }
@@ -141,7 +146,7 @@ public class FriendEntity extends PathfinderMob {
     }
 
     public void eatFood(ItemStack food) {
-        FoodProperties props = food.getFoodProperties(this);
+        FoodProperties props = food.get(DataComponents.FOOD);
         if (props != null) {
             foodLevel = Math.min(MAX_FOOD_LEVEL, foodLevel + props.nutrition());
             food.shrink(1);
@@ -155,7 +160,7 @@ public class FriendEntity extends PathfinderMob {
     }
 
     @Override
-    public void pickUpItem(ItemEntity itemEntity) {
+    protected void pickUpItem(ServerLevel serverLevel, ItemEntity itemEntity) {
         ItemStack stack = itemEntity.getItem();
 
         if (tryEquipShield(stack)) {
@@ -176,6 +181,12 @@ public class FriendEntity extends PathfinderMob {
             itemEntity.discard();
         } else {
             itemEntity.setItem(remaining);
+        }
+    }
+
+    public void collectItem(ItemEntity itemEntity) {
+        if (this.level() instanceof ServerLevel serverLevel) {
+            this.pickUpItem(serverLevel, itemEntity);
         }
     }
 
@@ -210,24 +221,32 @@ public class FriendEntity extends PathfinderMob {
     }
 
     private boolean tryEquipArmor(ItemStack stack) {
-        if (stack.getItem() instanceof ArmorItem armorItem) {
-            EquipmentSlot slot = armorItem.getEquipmentSlot();
-            ItemStack current = this.getItemBySlot(slot);
-            if (current.isEmpty() || isBetterArmor(stack, current)) {
-                if (!current.isEmpty()) {
-                    addToInventory(current);
+        Equippable equippable = stack.get(DataComponents.EQUIPPABLE);
+        if (equippable != null) {
+            EquipmentSlot slot = equippable.slot();
+            if (slot.isArmor()) {
+                ItemStack current = this.getItemBySlot(slot);
+                if (current.isEmpty() || isBetterArmor(stack, current)) {
+                    if (!current.isEmpty()) {
+                        addToInventory(current);
+                    }
+                    this.setItemSlot(slot, stack.copy());
+                    return true;
                 }
-                this.setItemSlot(slot, stack.copy());
-                return true;
             }
         }
         return false;
     }
 
     private boolean isBetterArmor(ItemStack newItem, ItemStack oldItem) {
-        if (!(newItem.getItem() instanceof ArmorItem newArmor)) return false;
-        if (!(oldItem.getItem() instanceof ArmorItem oldArmor)) return true;
-        return newArmor.getDefense() > oldArmor.getDefense();
+        ItemAttributeModifiers newMods = newItem.getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY);
+        ItemAttributeModifiers oldMods = oldItem.getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY);
+        Equippable equippable = newItem.get(DataComponents.EQUIPPABLE);
+        if (equippable == null) return false;
+        EquipmentSlot slot = equippable.slot();
+        double newArmor = newMods.compute(Attributes.ARMOR, 0.0, slot);
+        double oldArmor = oldMods.compute(Attributes.ARMOR, 0.0, slot);
+        return newArmor > oldArmor;
     }
 
     private boolean tryEquipWeapon(ItemStack stack) {
@@ -245,7 +264,7 @@ public class FriendEntity extends PathfinderMob {
     }
 
     private boolean isWeapon(ItemStack stack) {
-        return stack.getItem() instanceof SwordItem || stack.getItem() instanceof AxeItem;
+        return stack.is(ItemTags.SWORDS) || stack.getItem() instanceof AxeItem;
     }
 
     private boolean isBetterWeapon(ItemStack newItem, ItemStack oldItem) {
@@ -253,22 +272,14 @@ public class FriendEntity extends PathfinderMob {
     }
 
     private int getWeaponScore(ItemStack stack) {
-        int materialScore = 0;
         int typeScore = 0;
-
-        if (stack.getItem() instanceof TieredItem tiered) {
-            Tier tier = tiered.getTier();
-            if (tier == Tiers.NETHERITE) materialScore = 6;
-            else if (tier == Tiers.DIAMOND) materialScore = 5;
-            else if (tier == Tiers.IRON) materialScore = 4;
-            else if (tier == Tiers.GOLD) materialScore = 3;
-            else if (tier == Tiers.STONE) materialScore = 2;
-            else if (tier == Tiers.WOOD) materialScore = 1;
-        }
-        if (stack.getItem() instanceof SwordItem) typeScore = 2;
+        if (stack.is(ItemTags.SWORDS)) typeScore = 2;
         else if (stack.getItem() instanceof AxeItem) typeScore = 1;
 
-        return materialScore * 10 + typeScore;
+        ItemAttributeModifiers mods = stack.getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY);
+        double attackDamage = mods.compute(Attributes.ATTACK_DAMAGE, 0.0, EquipmentSlot.MAINHAND);
+
+        return (int)(attackDamage * 10) + typeScore;
     }
 
     // ---- Death Drops ----
@@ -317,45 +328,39 @@ public class FriendEntity extends PathfinderMob {
         return serverLevel.isVillage(pos);
     }
 
-    // ---- Persistence (NBT) ----
+    // ---- Persistence (ValueOutput/ValueInput) ----
 
     @Override
-    public void addAdditionalSaveData(CompoundTag tag) {
-        super.addAdditionalSaveData(tag);
-        tag.putString("SelectedTexture", selectedTexture);
-        tag.putInt("FoodLevel", foodLevel);
+    protected void addAdditionalSaveData(ValueOutput output) {
+        super.addAdditionalSaveData(output);
+        output.putString("SelectedTexture", selectedTexture);
+        output.putInt("FoodLevel", foodLevel);
 
-        ListTag inventoryTag = new ListTag();
+        ValueOutput.ValueOutputList inventoryList = output.childrenList("Inventory");
         for (int i = 0; i < inventory.getContainerSize(); i++) {
             ItemStack stack = inventory.getItem(i);
             if (!stack.isEmpty()) {
-                CompoundTag itemTag = new CompoundTag();
-                itemTag.putInt("Slot", i);
-                inventoryTag.add(stack.save(level().registryAccess(), itemTag));
+                ValueOutput child = inventoryList.addChild();
+                child.putInt("Slot", i);
+                child.store("Item", ItemStack.CODEC, stack);
             }
         }
-        tag.put("Inventory", inventoryTag);
     }
 
     @Override
-    public void readAdditionalSaveData(CompoundTag tag) {
-        super.readAdditionalSaveData(tag);
-        if (tag.contains("SelectedTexture")) {
-            selectedTexture = tag.getString("SelectedTexture");
-        }
-        if (tag.contains("FoodLevel")) {
-            foodLevel = tag.getInt("FoodLevel");
-        }
-        if (tag.contains("Inventory")) {
-            ListTag inventoryTag = tag.getList("Inventory", CompoundTag.TAG_COMPOUND);
-            for (int i = 0; i < inventoryTag.size(); i++) {
-                CompoundTag itemTag = inventoryTag.getCompound(i);
-                int slot = itemTag.getInt("Slot");
-                ItemStack stack = ItemStack.parse(level().registryAccess(), itemTag).orElse(ItemStack.EMPTY);
+    protected void readAdditionalSaveData(ValueInput input) {
+        super.readAdditionalSaveData(input);
+        selectedTexture = input.getStringOr("SelectedTexture", "default");
+        foodLevel = input.getIntOr("FoodLevel", MAX_FOOD_LEVEL);
+
+        ValueInput.ValueInputList inventoryList = input.childrenListOrEmpty("Inventory");
+        for (ValueInput child : inventoryList) {
+            int slot = child.getIntOr("Slot", -1);
+            child.read("Item", ItemStack.CODEC).ifPresent(stack -> {
                 if (slot >= 0 && slot < inventory.getContainerSize()) {
                     inventory.setItem(slot, stack);
                 }
-            }
+            });
         }
     }
 }
