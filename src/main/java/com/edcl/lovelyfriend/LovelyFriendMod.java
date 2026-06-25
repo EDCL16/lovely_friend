@@ -1,5 +1,7 @@
 package com.edcl.lovelyfriend;
 
+import com.edcl.lovelyfriend.entity.ModEntityTypes;
+import com.edcl.lovelyfriend.item.ModItems;
 import net.fabricmc.api.ModInitializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,6 +12,8 @@ public class LovelyFriendMod implements ModInitializer {
 
     @Override
     public void onInitialize() {
-        LOGGER.info("Lovely Friend mod initializing");
+        ModEntityTypes.register();
+        ModItems.register();
+        LOGGER.info("Lovely Friend mod initialized");
     }
 }
