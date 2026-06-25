@@ -58,6 +58,8 @@ public class FriendEntity extends PathfinderMob {
             "entity/female/13", "entity/female/14", "entity/female/15", "entity/female/16",
             "entity/female/17", "entity/female/18", "entity/female/19", "entity/female/20",
             "entity/female/21", "entity/female/22", "entity/female/23", "entity/female/24",
+            "entity/female/25", "entity/female/26", "entity/female/27", "entity/female/28",
+            "entity/female/29", "entity/female/30", "entity/female/31", "entity/female/32",
             "entity/hololive/anyanya", "entity/hololive/ayame",  "entity/hololive/botan",
             "entity/hololive/coco",    "entity/hololive/kanata", "entity/hololive/kobo",
             "entity/hololive/korone",  "entity/hololive/marine", "entity/hololive/miko",
