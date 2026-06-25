@@ -12,6 +12,10 @@ public class FriendEntity extends PathfinderMob {
         super(entityType, level);
     }
 
+    public String getSelectedTexture() {
+        return "default";
+    }
+
     public static AttributeSupplier.Builder createFriendAttributes() {
         return PathfinderMob.createMobAttributes()
                 .add(Attributes.MAX_HEALTH, 20.0)
