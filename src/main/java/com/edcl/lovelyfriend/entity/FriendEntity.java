@@ -26,7 +26,6 @@ import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.food.FoodProperties;
-import net.minecraft.world.item.AxeItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ShieldItem;
 import net.minecraft.world.item.component.ItemAttributeModifiers;
@@ -289,7 +288,9 @@ public class FriendEntity extends PathfinderMob {
     }
 
     private boolean isWeapon(ItemStack stack) {
-        return stack.is(ItemTags.SWORDS) || stack.getItem() instanceof AxeItem;
+        return stack.is(ItemTags.SWORDS) || stack.is(ItemTags.AXES)
+                || stack.is(ItemTags.PICKAXES) || stack.is(ItemTags.SHOVELS)
+                || stack.is(ItemTags.HOES);
     }
 
     private boolean isBetterWeapon(ItemStack newItem, ItemStack oldItem) {
@@ -298,13 +299,70 @@ public class FriendEntity extends PathfinderMob {
 
     private int getWeaponScore(ItemStack stack) {
         int typeScore = 0;
-        if (stack.is(ItemTags.SWORDS)) typeScore = 2;
-        else if (stack.getItem() instanceof AxeItem) typeScore = 1;
+        if (stack.is(ItemTags.SWORDS)) typeScore = 4;
+        else if (stack.is(ItemTags.AXES)) typeScore = 3;
+        else if (stack.is(ItemTags.PICKAXES)) typeScore = 2;
+        else if (stack.is(ItemTags.SHOVELS)) typeScore = 1;
+        else if (stack.is(ItemTags.HOES)) typeScore = 1;
 
         ItemAttributeModifiers mods = stack.getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY);
         double attackDamage = mods.compute(Attributes.ATTACK_DAMAGE, 0.0, EquipmentSlot.MAINHAND);
 
         return (int)(attackDamage * 10) + typeScore;
+    }
+
+    // ---- Mining and Tool helpers ----
+
+    public boolean isPickaxe(ItemStack stack) {
+        return !stack.isEmpty() && stack.is(ItemTags.PICKAXES);
+    }
+
+    public boolean hasPickaxe() {
+        if (isPickaxe(this.getMainHandItem())) return true;
+        for (int i = 0; i < inventory.getContainerSize(); i++) {
+            if (isPickaxe(inventory.getItem(i))) return true;
+        }
+        return false;
+    }
+
+    public boolean equipPickaxe() {
+        if (isPickaxe(this.getMainHandItem())) return true;
+        for (int i = 0; i < inventory.getContainerSize(); i++) {
+            ItemStack stack = inventory.getItem(i);
+            if (isPickaxe(stack)) {
+                ItemStack hand = this.getMainHandItem().copy();
+                this.setItemSlot(EquipmentSlot.MAINHAND, stack.copy());
+                inventory.setItem(i, hand);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public void restoreWeapon() {
+        int bestSlot = -1;
+        ItemStack bestWeapon = ItemStack.EMPTY;
+        for (int i = 0; i < inventory.getContainerSize(); i++) {
+            ItemStack stack = inventory.getItem(i);
+            if (!stack.isEmpty() && isWeapon(stack)) {
+                if (bestWeapon.isEmpty() || isBetterWeapon(stack, bestWeapon)) {
+                    bestWeapon = stack;
+                    bestSlot = i;
+                }
+            }
+        }
+
+        ItemStack hand = this.getMainHandItem();
+        if (!bestWeapon.isEmpty()) {
+            ItemStack oldHand = hand.copy();
+            this.setItemSlot(EquipmentSlot.MAINHAND, bestWeapon.copy());
+            inventory.setItem(bestSlot, oldHand);
+        } else if (isPickaxe(hand)) {
+            ItemStack remaining = addToInventory(hand.copy());
+            if (remaining.isEmpty()) {
+                this.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
+            }
+        }
     }
 
     // ---- Death Drops ----
