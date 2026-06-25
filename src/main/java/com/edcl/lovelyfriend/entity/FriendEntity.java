@@ -11,6 +11,9 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.DifficultyInstance;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.network.syncher.EntityDataSerializers;
+import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -45,11 +48,13 @@ public class FriendEntity extends PathfinderMob {
     private static final int DROP_FOOD_LEVEL_TICKS = 600;
     private static final int HUNGER_DAMAGE_TICKS = 50;
 
+    private static final EntityDataAccessor<String> TEXTURE_ID =
+            SynchedEntityData.defineId(FriendEntity.class, EntityDataSerializers.STRING);
+
     private final SimpleContainer inventory = new SimpleContainer(100);
     private int foodLevel = MAX_FOOD_LEVEL;
     private int foodTickTimer = 0;
     private int hungerDamageTimer = 0;
-    private String selectedTexture = "default";
 
     private static final List<String> TEXTURES = Arrays.asList(
             "entity/female/1",  "entity/female/2",  "entity/female/3",  "entity/female/4",
@@ -74,6 +79,12 @@ public class FriendEntity extends PathfinderMob {
     public FriendEntity(EntityType<? extends FriendEntity> entityType, Level level) {
         super(entityType, level);
         this.setPersistenceRequired();
+    }
+
+    @Override
+    protected void defineSynchedData(SynchedEntityData.Builder builder) {
+        super.defineSynchedData(builder);
+        builder.define(TEXTURE_ID, TEXTURES.get(0));
     }
 
     public static AttributeSupplier.Builder createFriendAttributes() {
@@ -323,14 +334,14 @@ public class FriendEntity extends PathfinderMob {
     // ---- Texture System ----
 
     public String getSelectedTexture() {
-        return selectedTexture;
+        return this.getEntityData().get(TEXTURE_ID);
     }
 
     @Nullable
     @Override
     public SpawnGroupData finalizeSpawn(ServerLevelAccessor level, DifficultyInstance difficulty,
                                         EntitySpawnReason reason, @Nullable SpawnGroupData spawnData) {
-        selectedTexture = TEXTURES.get(this.random.nextInt(TEXTURES.size()));
+        this.getEntityData().set(TEXTURE_ID, TEXTURES.get(this.random.nextInt(TEXTURES.size())));
         return super.finalizeSpawn(level, difficulty, reason, spawnData);
     }
 
@@ -347,7 +358,7 @@ public class FriendEntity extends PathfinderMob {
     @Override
     protected void addAdditionalSaveData(ValueOutput output) {
         super.addAdditionalSaveData(output);
-        output.putString("SelectedTexture", selectedTexture);
+        output.putString("SelectedTexture", this.getEntityData().get(TEXTURE_ID));
         output.putInt("FoodLevel", foodLevel);
 
         ValueOutput.ValueOutputList inventoryList = output.childrenList("Inventory");
@@ -364,10 +375,11 @@ public class FriendEntity extends PathfinderMob {
     @Override
     protected void readAdditionalSaveData(ValueInput input) {
         super.readAdditionalSaveData(input);
-        selectedTexture = input.getStringOr("SelectedTexture", "");
-        if (!TEXTURES.contains(selectedTexture)) {
-            selectedTexture = TEXTURES.get(this.random.nextInt(TEXTURES.size()));
+        String tex = input.getStringOr("SelectedTexture", "");
+        if (!TEXTURES.contains(tex)) {
+            tex = TEXTURES.get(this.random.nextInt(TEXTURES.size()));
         }
+        this.getEntityData().set(TEXTURE_ID, tex);
         foodLevel = input.getIntOr("FoodLevel", MAX_FOOD_LEVEL);
 
         ValueInput.ValueInputList inventoryList = input.childrenListOrEmpty("Inventory");
