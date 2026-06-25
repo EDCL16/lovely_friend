@@ -1,0 +1,21 @@
+{
+    "schemaVersion": 1,
+    "id": "lovelyfriend",
+    "version": "${version}",
+    "name": "Lovely Friend",
+    "description": "Adds friendly humanoid NPC companions that spawn near villages",
+    "authors": ["EDCL"],
+    "license": "MIT",
+    "icon": "assets/lovelyfriend/icon.png",
+    "environment": "*",
+    "entrypoints": {
+        "main": ["com.edcl.lovelyfriend.LovelyFriendMod"],
+        "client": ["com.edcl.lovelyfriend.client.LovelyFriendModClient"]
+    },
+    "depends": {
+        "fabricloader": ">=0.19.3",
+        "minecraft": "~26.2",
+        "java": ">=25",
+        "fabric-api": "*"
+    }
+}
