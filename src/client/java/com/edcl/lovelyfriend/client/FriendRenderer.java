@@ -32,7 +32,7 @@ public class FriendRenderer extends MobRenderer<FriendEntity, FriendEntityRender
     public Identifier getTextureLocation(FriendEntityRenderState state) {
         return Identifier.fromNamespaceAndPath(
                 LovelyFriendMod.MOD_ID,
-                "textures/entity/friend/" + state.selectedTexture + ".png"
+                "textures/" + state.selectedTexture + ".png"
         );
     }
 

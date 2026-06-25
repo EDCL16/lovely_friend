@@ -52,9 +52,21 @@ public class FriendEntity extends PathfinderMob {
     private String selectedTexture = "default";
 
     private static final List<String> TEXTURES = Arrays.asList(
-            "default", "steve", "alex",
-            "female1", "female2", "female3", "female4", "female5",
-            "male1", "male2"
+            "entity/female/1",  "entity/female/2",  "entity/female/3",  "entity/female/4",
+            "entity/female/5",  "entity/female/6",  "entity/female/7",  "entity/female/8",
+            "entity/female/9",  "entity/female/10", "entity/female/11", "entity/female/12",
+            "entity/female/13", "entity/female/14", "entity/female/15", "entity/female/16",
+            "entity/female/17", "entity/female/18", "entity/female/19", "entity/female/20",
+            "entity/female/21", "entity/female/22", "entity/female/23", "entity/female/24",
+            "entity/hololive/anyanya", "entity/hololive/ayame",  "entity/hololive/botan",
+            "entity/hololive/coco",    "entity/hololive/kanata", "entity/hololive/kobo",
+            "entity/hololive/korone",  "entity/hololive/marine", "entity/hololive/miko",
+            "entity/hololive/pekora",  "entity/hololive/rushia", "entity/hololive/subaru",
+            "entity/hololive/susei",   "entity/hololive/towa",
+            "entity/myth/ame",      "entity/myth/calliope", "entity/myth/gura",
+            "entity/myth/ina",      "entity/myth/kiara",
+            "entity/promise/baelz", "entity/promise/fauna",  "entity/promise/irys",
+            "entity/promise/kronii","entity/promise/mumei"
     );
 
     public FriendEntity(EntityType<? extends FriendEntity> entityType, Level level) {
