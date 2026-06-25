@@ -10,10 +10,6 @@ import net.minecraft.resources.Identifier;
 
 public class FriendRenderer extends MobRenderer<FriendEntity, FriendEntityRenderState, FriendModel> {
 
-    private static final Identifier DEFAULT_TEXTURE = Identifier.fromNamespaceAndPath(
-            LovelyFriendMod.MOD_ID, "textures/entity/friend/default.png"
-    );
-
     public FriendRenderer(EntityRendererProvider.Context context) {
         super(context, new FriendModel(context.bakeLayer(ModEntityModelLayers.FRIEND)), 0.5f);
         this.addLayer(new HumanoidArmorLayer<>(this, context.getModelSet()));

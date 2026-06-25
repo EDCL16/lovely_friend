@@ -25,6 +25,7 @@ import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.food.FoodProperties;
 import net.minecraft.world.item.*;
+import net.minecraft.world.item.Tiers;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ServerLevelAccessor;
 
@@ -257,7 +258,12 @@ public class FriendEntity extends PathfinderMob {
 
         if (stack.getItem() instanceof TieredItem tiered) {
             Tier tier = tiered.getTier();
-            materialScore = (int) (tier.getSpeed() * 10);
+            if (tier == Tiers.NETHERITE) materialScore = 6;
+            else if (tier == Tiers.DIAMOND) materialScore = 5;
+            else if (tier == Tiers.IRON) materialScore = 4;
+            else if (tier == Tiers.GOLD) materialScore = 3;
+            else if (tier == Tiers.STONE) materialScore = 2;
+            else if (tier == Tiers.WOOD) materialScore = 1;
         }
         if (stack.getItem() instanceof SwordItem) typeScore = 2;
         else if (stack.getItem() instanceof AxeItem) typeScore = 1;

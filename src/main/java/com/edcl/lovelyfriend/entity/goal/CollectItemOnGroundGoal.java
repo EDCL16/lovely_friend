@@ -25,7 +25,8 @@ public class CollectItemOnGroundGoal extends Goal {
     @Override
     public boolean canUse() {
         AABB searchBox = entity.getBoundingBox().inflate(SEARCH_RADIUS);
-        List<ItemEntity> items = entity.level().getEntitiesOfClass(ItemEntity.class, searchBox);
+        List<ItemEntity> items = entity.level().getEntitiesOfClass(ItemEntity.class, searchBox,
+                item -> !item.hasPickUpDelay());
         if (items.isEmpty()) return false;
         targetItem = items.stream()
                 .min(Comparator.comparingDouble(entity::distanceToSqr))
