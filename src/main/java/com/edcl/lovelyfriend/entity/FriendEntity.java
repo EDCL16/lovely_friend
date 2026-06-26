@@ -1,8 +1,15 @@
 package com.edcl.lovelyfriend.entity;
 
+import com.edcl.lovelyfriend.entity.goal.BreakBlockGoal;
 import com.edcl.lovelyfriend.entity.goal.CollectItemOnGroundGoal;
 import com.edcl.lovelyfriend.entity.goal.EatFoodGoal;
+import com.edcl.lovelyfriend.entity.goal.EquipBestToolGoal;
+import com.edcl.lovelyfriend.entity.goal.ExploreGoal;
+import com.edcl.lovelyfriend.entity.goal.FleeDangerGoal;
 import com.edcl.lovelyfriend.entity.goal.FollowPlayerGoal;
+import com.edcl.lovelyfriend.entity.goal.LeashMobGoal;
+import com.edcl.lovelyfriend.entity.goal.RideFriendGoal;
+import com.edcl.lovelyfriend.entity.goal.ShareWeaponGoal;
 import com.edcl.lovelyfriend.item.ModItems;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
@@ -28,6 +35,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.food.FoodProperties;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ShieldItem;
+import net.minecraft.world.item.TridentItem;
 import net.minecraft.world.item.component.ItemAttributeModifiers;
 import net.minecraft.world.item.equipment.Equippable;
 import net.minecraft.world.level.Level;
@@ -46,14 +54,20 @@ public class FriendEntity extends PathfinderMob {
     private static final int HUNGER_DAMAGE_THRESHOLD = 5;
     private static final int DROP_FOOD_LEVEL_TICKS = 600;
     private static final int HUNGER_DAMAGE_TICKS = 50;
+    private static final int GOAL_UPDATE_INTERVAL = 20;
 
     private static final EntityDataAccessor<String> TEXTURE_ID =
+            SynchedEntityData.defineId(FriendEntity.class, EntityDataSerializers.STRING);
+    
+    private static final EntityDataAccessor<String> CURRENT_GOAL =
             SynchedEntityData.defineId(FriendEntity.class, EntityDataSerializers.STRING);
 
     private final SimpleContainer inventory = new SimpleContainer(100);
     private int foodLevel = MAX_FOOD_LEVEL;
     private int foodTickTimer = 0;
     private int hungerDamageTimer = 0;
+    private int goalUpdateTimer = 0;
+    private String lastGoalName = "";
 
     private static final List<String> TEXTURES = Arrays.asList(
             "entity/female/1",  "entity/female/2",  "entity/female/3",  "entity/female/4",
@@ -84,6 +98,7 @@ public class FriendEntity extends PathfinderMob {
     protected void defineSynchedData(SynchedEntityData.Builder builder) {
         super.defineSynchedData(builder);
         builder.define(TEXTURE_ID, TEXTURES.get(0));
+        builder.define(CURRENT_GOAL, "");
     }
 
     public static AttributeSupplier.Builder createFriendAttributes() {
@@ -99,16 +114,36 @@ public class FriendEntity extends PathfinderMob {
 
     @Override
     protected void registerGoals() {
-        this.goalSelector.addGoal(1, new FloatGoal(this));
-        this.goalSelector.addGoal(1, new EatFoodGoal(this));
-        this.goalSelector.addGoal(1, new MeleeAttackGoal(this, 1.0, true));
-        this.goalSelector.addGoal(2, new MoveTowardsTargetGoal(this, 1.0, 32.0f));
+        // 0: 核心本能 / 狀態改變 (避免淹死、吃食物、裝備工具)
+        this.goalSelector.addGoal(0, new FloatGoal(this));
+        this.goalSelector.addGoal(0, new EatFoodGoal(this));
+        this.goalSelector.addGoal(0, new EquipBestToolGoal(this));
+
+        // 3: 環境互動 (撿東西、騎乘朋友)
         this.goalSelector.addGoal(3, new CollectItemOnGroundGoal(this));
-        this.goalSelector.addGoal(4, new RandomStrollGoal(this, 1.0));
+        this.goalSelector.addGoal(3, new RideFriendGoal(this));
+
+        // 1: 致命危險防禦 (逃離爆炸、火源)
+        this.goalSelector.addGoal(1, new FleeDangerGoal(this));
+
+        // 2: 戰鬥行為 (近戰攻擊、追擊目標)
+        this.goalSelector.addGoal(2, new MeleeAttackGoal(this, 1.0, true));
+        this.goalSelector.addGoal(2, new MoveTowardsTargetGoal(this, 1.0, 32.0f));
+
+
+        // 4: 環境互動 / 搜刮 (破壞方塊、分享裝備、栓繩套動物)
+        this.goalSelector.addGoal(4, new BreakBlockGoal(this));
+        this.goalSelector.addGoal(4, new ShareWeaponGoal(this));
+        this.goalSelector.addGoal(4, new LeashMobGoal(this));
+
+        // 5: 自主生活 / 閒逛 (村莊徘徊、隨機走動、探索新生態域)
+        this.goalSelector.addGoal(5, new RandomStrollGoal(this, 1.2)); // Faster walks
         this.goalSelector.addGoal(5, new StrollThroughVillageGoal(this, 20));
+        this.goalSelector.addGoal(5, new ExploreGoal(this));
+
+        this.goalSelector.addGoal(6, new LookAtPlayerGoal(this, Player.class, 8.0f));
+        this.goalSelector.addGoal(6, new LookAtPlayerGoal(this, FriendEntity.class, 8.0f));
         this.goalSelector.addGoal(7, new FollowPlayerGoal(this, 0.5, 20.0, 3.0));
-        this.goalSelector.addGoal(8, new LookAtPlayerGoal(this, Player.class, 8.0f));
-        this.goalSelector.addGoal(8, new LookAtPlayerGoal(this, FriendEntity.class, 8.0f));
         this.goalSelector.addGoal(8, new RandomLookAroundGoal(this));
 
         this.targetSelector.addGoal(2, new HurtByTargetGoal(this));
@@ -125,7 +160,31 @@ public class FriendEntity extends PathfinderMob {
         if (!this.level().isClientSide()) {
             reduceHunger();
             applyHungerDamage();
+            updateCurrentGoalDisplay();
         }
+    }
+
+    private void updateCurrentGoalDisplay() {
+        goalUpdateTimer++;
+        if (goalUpdateTimer < GOAL_UPDATE_INTERVAL) return;
+        goalUpdateTimer = 0;
+
+        String newGoal = getActiveGoalName();
+        if (!newGoal.equals(lastGoalName)) {
+            lastGoalName = newGoal;
+            this.getEntityData().set(CURRENT_GOAL, newGoal);
+        }
+    }
+
+    public String getActiveGoalName() {
+        // Note: full goal detection requires more complex tracking
+        // This is a simplified version that returns the last updated goal
+        String goal = this.getCurrentGoalDisplay();
+        return goal.isEmpty() ? "Idle" : goal;
+    }
+
+    public String getCurrentGoalDisplay() {
+        return this.getEntityData().get(CURRENT_GOAL);
     }
 
     private void reduceHunger() {
@@ -287,23 +346,28 @@ public class FriendEntity extends PathfinderMob {
         return false;
     }
 
-    private boolean isWeapon(ItemStack stack) {
+    public boolean isWeapon(ItemStack stack) {
         return stack.is(ItemTags.SWORDS) || stack.is(ItemTags.AXES)
                 || stack.is(ItemTags.PICKAXES) || stack.is(ItemTags.SHOVELS)
-                || stack.is(ItemTags.HOES);
+                || stack.is(ItemTags.HOES) || isTrident(stack);
     }
 
-    private boolean isBetterWeapon(ItemStack newItem, ItemStack oldItem) {
+    private boolean isTrident(ItemStack stack) {
+        return stack.getItem() instanceof TridentItem;
+    }
+
+    public boolean isBetterWeapon(ItemStack newItem, ItemStack oldItem) {
         return getWeaponScore(newItem) > getWeaponScore(oldItem);
     }
 
-    private int getWeaponScore(ItemStack stack) {
+    public int getWeaponScore(ItemStack stack) {
         int typeScore = 0;
         if (stack.is(ItemTags.SWORDS)) typeScore = 4;
         else if (stack.is(ItemTags.AXES)) typeScore = 3;
         else if (stack.is(ItemTags.PICKAXES)) typeScore = 2;
         else if (stack.is(ItemTags.SHOVELS)) typeScore = 1;
         else if (stack.is(ItemTags.HOES)) typeScore = 1;
+        else if (isTrident(stack)) typeScore = 5;
 
         ItemAttributeModifiers mods = stack.getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY);
         double attackDamage = mods.compute(Attributes.ATTACK_DAMAGE, 0.0, EquipmentSlot.MAINHAND);
@@ -387,6 +451,16 @@ public class FriendEntity extends PathfinderMob {
         // Drop a Friendship Stone
         this.spawnAtLocation(level, new ItemStack(ModItems.FRIENDSHIP_STONE));
         super.dropAllDeathLoot(level, damageSource);
+    }
+
+    // ---- Leash Support ----
+    // FriendEntity can be leashed by players using a lead.
+    // The Mob base class handles the leash logic via setLeashedTo/dropLeash.
+    // We just need to make sure the leash knot rendering works properly.
+
+    @Override
+    public boolean canBeLeashed() {
+        return !this.isLeashed();
     }
 
     // ---- Texture System ----

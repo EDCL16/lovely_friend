@@ -4,4 +4,5 @@ import net.minecraft.client.renderer.entity.state.HumanoidRenderState;
 
 public class FriendEntityRenderState extends HumanoidRenderState {
     public String selectedTexture = "default";
+    public String currentGoal = "";
 }

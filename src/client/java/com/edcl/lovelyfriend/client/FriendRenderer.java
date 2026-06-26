@@ -40,6 +40,7 @@ public class FriendRenderer extends MobRenderer<FriendEntity, FriendEntityRender
     public void extractRenderState(FriendEntity entity, FriendEntityRenderState state, float tickProgress) {
         super.extractRenderState(entity, state, tickProgress);
         state.selectedTexture = entity.getSelectedTexture();
+        state.currentGoal = entity.getCurrentGoalDisplay();
         ArmedEntityRenderState.extractArmedEntityRenderState(entity, state, this.itemModelResolver, tickProgress);
     }
 }

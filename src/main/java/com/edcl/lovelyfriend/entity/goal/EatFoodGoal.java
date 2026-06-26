@@ -22,7 +22,10 @@ public class EatFoodGoal extends Goal {
             cooldown--;
             return false;
         }
-        return entity.isHungry() && entity.hasFoodInInventory();
+        if (!entity.isHungry()) return false;
+        if (entity.isVehicle()) return false;
+        if (entity.getTarget() != null) return false;
+        return entity.hasFoodInInventory();
     }
 
     @Override
