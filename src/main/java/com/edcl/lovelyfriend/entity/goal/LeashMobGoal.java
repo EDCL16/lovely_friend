@@ -108,11 +108,8 @@ public class LeashMobGoal extends Goal {
         double closestDist = Double.MAX_VALUE;
 
         for (Mob mob : mobs) {
+            if (mob == entity) continue;
             if (mob.isAlive() && !mob.isLeashed()) {
-                // Don't leash our friends
-                // Don't leash our friends
-                if (mob instanceof FriendEntity) continue;
-
                 // Only leash passive/neutral mobs (not monsters)
                 if (mob instanceof Animal || isNeutralMob(mob)) {
                     double dist = entity.distanceToSqr(mob);

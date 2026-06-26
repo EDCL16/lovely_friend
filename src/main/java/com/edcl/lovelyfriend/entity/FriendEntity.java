@@ -1,14 +1,26 @@
 package com.edcl.lovelyfriend.entity;
 
 import com.edcl.lovelyfriend.entity.goal.BreakBlockGoal;
+import com.edcl.lovelyfriend.entity.goal.BreedFriendGoal;
+import com.edcl.lovelyfriend.entity.goal.ChopTreeGoal;
+import com.edcl.lovelyfriend.entity.goal.CraftWoodenToolsGoal;
+import com.edcl.lovelyfriend.entity.goal.DiggingEscapeGoal;
+import com.edcl.lovelyfriend.entity.goal.ExtinguishFireGoal;
+import com.edcl.lovelyfriend.entity.goal.FishingGoal;
+import com.edcl.lovelyfriend.entity.goal.PlaceBlockToClimbGoal;
 import com.edcl.lovelyfriend.entity.goal.CollectItemOnGroundGoal;
 import com.edcl.lovelyfriend.entity.goal.EatFoodGoal;
 import com.edcl.lovelyfriend.entity.goal.EquipBestToolGoal;
 import com.edcl.lovelyfriend.entity.goal.ExploreGoal;
 import com.edcl.lovelyfriend.entity.goal.FleeDangerGoal;
+import com.edcl.lovelyfriend.entity.goal.FindFoodGoal;
 import com.edcl.lovelyfriend.entity.goal.FollowPlayerGoal;
+import com.edcl.lovelyfriend.entity.goal.HuntLivestockGoal;
 import com.edcl.lovelyfriend.entity.goal.LeashMobGoal;
+import com.edcl.lovelyfriend.entity.goal.PlantCropGoal;
 import com.edcl.lovelyfriend.entity.goal.RideFriendGoal;
+import com.edcl.lovelyfriend.entity.goal.ShareArmorGoal;
+import com.edcl.lovelyfriend.entity.goal.ShareFoodGoal;
 import com.edcl.lovelyfriend.entity.goal.ShareWeaponGoal;
 import com.edcl.lovelyfriend.item.ModItems;
 import net.minecraft.core.BlockPos;
@@ -33,7 +45,15 @@ import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.food.FoodProperties;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.monster.RangedAttackMob;
+import net.minecraft.world.entity.projectile.arrow.Arrow;
+import net.minecraft.world.item.BowItem;
+import net.minecraft.world.item.CrossbowItem;
+import net.minecraft.world.item.FishingRodItem;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.item.ShieldItem;
 import net.minecraft.world.item.TridentItem;
 import net.minecraft.world.item.component.ItemAttributeModifiers;
@@ -48,7 +68,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Arrays;
 import java.util.List;
 
-public class FriendEntity extends PathfinderMob {
+public class FriendEntity extends PathfinderMob implements RangedAttackMob {
 
     private static final int MAX_FOOD_LEVEL = 20;
     private static final int HUNGER_DAMAGE_THRESHOLD = 5;
@@ -68,6 +88,11 @@ public class FriendEntity extends PathfinderMob {
     private int hungerDamageTimer = 0;
     private int goalUpdateTimer = 0;
     private String lastGoalName = "";
+    private int breedCooldown = 0;
+    private int regenTimer = 0;
+
+    public boolean isBreedingOnCooldown() { return breedCooldown > 0; }
+    public void setBreedCooldown(int ticks) { breedCooldown = ticks; }
 
     private static final List<String> TEXTURES = Arrays.asList(
             "entity/female/1",  "entity/female/2",  "entity/female/3",  "entity/female/4",
@@ -78,6 +103,18 @@ public class FriendEntity extends PathfinderMob {
             "entity/female/21", "entity/female/22", "entity/female/23", "entity/female/24",
             "entity/female/25", "entity/female/26", "entity/female/27", "entity/female/28",
             "entity/female/29", "entity/female/30", "entity/female/31", "entity/female/32",
+            "entity/female/33", "entity/female/34", "entity/female/35", "entity/female/36",
+            "entity/female/37", "entity/female/38", "entity/female/39", "entity/female/40",
+            "entity/female/41", "entity/female/42", "entity/female/43", "entity/female/44",
+            "entity/female/45", "entity/female/46", "entity/female/47", "entity/female/48",
+            "entity/female/49", "entity/female/50", "entity/female/51", "entity/female/52",
+            "entity/female/53", "entity/female/54", "entity/female/55", "entity/female/56",
+            "entity/female/57", "entity/female/58", "entity/female/59", "entity/female/60",
+            "entity/female/61", "entity/female/62", "entity/female/63", "entity/female/64",
+            "entity/female/65", "entity/female/66", "entity/female/67", "entity/female/68",
+            "entity/female/69", "entity/female/70", "entity/female/71", "entity/female/72",
+            "entity/female/73", "entity/female/74", "entity/female/75", "entity/female/76",
+            "entity/female/77",
             "entity/hololive/anyanya", "entity/hololive/ayame",  "entity/hololive/botan",
             "entity/hololive/coco",    "entity/hololive/kanata", "entity/hololive/kobo",
             "entity/hololive/korone",  "entity/hololive/marine", "entity/hololive/miko",
@@ -114,31 +151,75 @@ public class FriendEntity extends PathfinderMob {
 
     @Override
     protected void registerGoals() {
-        // 0: 核心本能 / 狀態改變 (避免淹死、吃食物、裝備工具)
+        // 0: 核心本能 / 狀態改變 (避免淹死、吃食物、裝備工具、尋找食物)
         this.goalSelector.addGoal(0, new FloatGoal(this));
         this.goalSelector.addGoal(0, new EatFoodGoal(this));
         this.goalSelector.addGoal(0, new EquipBestToolGoal(this));
+        this.goalSelector.addGoal(0, new FindFoodGoal(this));
 
-        // 3: 環境互動 (撿東西、騎乘朋友)
+        // 3: 環境互動 (撿東西、騎乘朋友、挖開阻礙、搭方塊爬高、製作工具)
         this.goalSelector.addGoal(3, new CollectItemOnGroundGoal(this));
         this.goalSelector.addGoal(3, new RideFriendGoal(this));
+        this.goalSelector.addGoal(3, new DiggingEscapeGoal(this));
+        this.goalSelector.addGoal(3, new PlaceBlockToClimbGoal(this));
+        this.goalSelector.addGoal(3, new CraftWoodenToolsGoal(this));
 
-        // 1: 致命危險防禦 (逃離爆炸、火源)
+        // 3.5: 自主行為 (狩獵、種植、砍樹)
+        this.goalSelector.addGoal(3, new HuntLivestockGoal(this));
+        this.goalSelector.addGoal(3, new PlantCropGoal(this));
+        this.goalSelector.addGoal(4, new ChopTreeGoal(this));
+
+        // 1: 致命危險防禦 (滅火、逃離爆炸、火源)
+        this.goalSelector.addGoal(1, new ExtinguishFireGoal(this));
         this.goalSelector.addGoal(1, new FleeDangerGoal(this));
 
-        // 2: 戰鬥行為 (近戰攻擊、追擊目標)
+        // 2: 戰鬥行為 (遠程攻擊、近戰攻擊、追擊目標)
+        this.goalSelector.addGoal(2, new RangedAttackGoal(this, 1.0, 20, 40, 15.0f) {
+            @Override public boolean canUse() {
+                return FriendEntity.this.hasRangedWeaponAndAmmo() && super.canUse();
+            }
+            @Override public boolean canContinueToUse() {
+                return FriendEntity.this.hasRangedWeaponAndAmmo() && super.canContinueToUse();
+            }
+            @Override public void start() {
+                FriendEntity.this.equipRangedWeapon();
+                super.start();
+                if (FriendEntity.this.getMainHandItem().getItem() instanceof BowItem) {
+                    FriendEntity.this.startUsingItem(InteractionHand.MAIN_HAND);
+                }
+            }
+            @Override public void stop() {
+                if (FriendEntity.this.isUsingItem()) FriendEntity.this.stopUsingItem();
+                FriendEntity.this.restoreWeapon();
+                super.stop();
+            }
+        });
         this.goalSelector.addGoal(2, new MeleeAttackGoal(this, 1.0, true));
         this.goalSelector.addGoal(2, new MoveTowardsTargetGoal(this, 1.0, 32.0f));
 
 
-        // 4: 環境互動 / 搜刮 (破壞方塊、分享裝備、栓繩套動物)
+        // 4: 環境互動 / 搜刮 (破壞方塊、釣魚、分享裝備/盔甲/食物、栓繩套動物)
         this.goalSelector.addGoal(4, new BreakBlockGoal(this));
+        this.goalSelector.addGoal(4, new FishingGoal(this));
         this.goalSelector.addGoal(4, new ShareWeaponGoal(this));
+        this.goalSelector.addGoal(4, new ShareArmorGoal(this));
+        this.goalSelector.addGoal(4, new ShareFoodGoal(this));
         this.goalSelector.addGoal(4, new LeashMobGoal(this));
 
-        // 5: 自主生活 / 閒逛 (村莊徘徊、隨機走動、探索新生態域)
-        this.goalSelector.addGoal(5, new RandomStrollGoal(this, 1.2)); // Faster walks
-        this.goalSelector.addGoal(5, new StrollThroughVillageGoal(this, 20));
+        // 5: 自主生活 / 閒逛 (繁殖、村莊徘徊、隨機走動、探索新生態域)
+        this.goalSelector.addGoal(5, new BreedFriendGoal(this));
+        this.goalSelector.addGoal(5, new RandomStrollGoal(this, 1.2) {
+            @Override public boolean canUse() {
+                if (FriendEntity.this.isLeashed() && FriendEntity.this.getRandom().nextInt(10) != 0) return false;
+                return super.canUse();
+            }
+        });
+        this.goalSelector.addGoal(5, new StrollThroughVillageGoal(this, 20) {
+            @Override public boolean canUse() {
+                if (FriendEntity.this.isLeashed()) return false;
+                return super.canUse();
+            }
+        });
         this.goalSelector.addGoal(5, new ExploreGoal(this));
 
         this.goalSelector.addGoal(6, new LookAtPlayerGoal(this, Player.class, 8.0f));
@@ -160,7 +241,9 @@ public class FriendEntity extends PathfinderMob {
         if (!this.level().isClientSide()) {
             reduceHunger();
             applyHungerDamage();
+            applyNaturalRegen();
             updateCurrentGoalDisplay();
+            if (breedCooldown > 0) breedCooldown--;
         }
     }
 
@@ -194,6 +277,18 @@ public class FriendEntity extends PathfinderMob {
             if (foodLevel > 0) {
                 foodLevel--;
             }
+        }
+    }
+
+    private void applyNaturalRegen() {
+        if (foodLevel >= MAX_FOOD_LEVEL - 2 && this.getHealth() < this.getMaxHealth()) {
+            if (++regenTimer >= 80) {
+                regenTimer = 0;
+                this.heal(1.0f);
+                foodLevel = Math.max(0, foodLevel - 1);
+            }
+        } else {
+            regenTimer = 0;
         }
     }
 
@@ -255,6 +350,11 @@ public class FriendEntity extends PathfinderMob {
             return;
         }
         if (tryEquipWeapon(stack)) {
+            itemEntity.discard();
+            return;
+        }
+        if (stack.getItem() instanceof FishingRodItem && this.getMainHandItem().isEmpty()) {
+            this.setItemSlot(EquipmentSlot.MAINHAND, stack.copy());
             itemEntity.discard();
             return;
         }
@@ -375,7 +475,121 @@ public class FriendEntity extends PathfinderMob {
         return (int)(attackDamage * 10) + typeScore;
     }
 
+    // ---- Ranged combat ----
+
+    @Override
+    public void performRangedAttack(LivingEntity target, float pullProgress) {
+        if (!(this.level() instanceof ServerLevel serverLevel)) return;
+        ItemStack hand = this.getMainHandItem();
+        if (!(hand.getItem() instanceof BowItem) && !(hand.getItem() instanceof CrossbowItem)) return;
+
+        ItemStack ammo = ItemStack.EMPTY;
+        for (int i = 0; i < inventory.getContainerSize(); i++) {
+            ItemStack s = inventory.getItem(i);
+            if (s.is(ItemTags.ARROWS)) { ammo = s; break; }
+        }
+        if (ammo.isEmpty()) return;
+
+        Arrow arrow = new Arrow(serverLevel, this, ammo.copyWithCount(1), hand);
+        double dx = target.getX() - this.getX();
+        double dy = target.getEyeY() - arrow.getY() - 0.1;
+        double dz = target.getZ() - this.getZ();
+        double horizDist = Math.sqrt(dx * dx + dz * dz);
+        arrow.shoot(dx, dy + horizDist * 0.2, dz, pullProgress * 3.0f, 1.0f);
+        this.playSound(SoundEvents.ARROW_SHOOT, 1.0f, 1.0f / (this.getRandom().nextFloat() * 0.4f + 0.8f));
+        serverLevel.addFreshEntity(arrow);
+        ammo.shrink(1);
+
+        // Restart bow-drawing animation for the next shot
+        if (hand.getItem() instanceof BowItem) {
+            this.stopUsingItem();
+            this.startUsingItem(InteractionHand.MAIN_HAND);
+        }
+    }
+
+    public boolean isRangedWeapon(ItemStack stack) {
+        return !stack.isEmpty() && (stack.getItem() instanceof BowItem || stack.getItem() instanceof CrossbowItem);
+    }
+
+    public boolean hasRangedWeaponAndAmmo() {
+        boolean hasWeapon = isRangedWeapon(this.getMainHandItem());
+        if (!hasWeapon) {
+            for (int i = 0; i < inventory.getContainerSize(); i++) {
+                if (isRangedWeapon(inventory.getItem(i))) { hasWeapon = true; break; }
+            }
+        }
+        if (!hasWeapon) return false;
+        for (int i = 0; i < inventory.getContainerSize(); i++) {
+            if (inventory.getItem(i).is(ItemTags.ARROWS)) return true;
+        }
+        return false;
+    }
+
+    public boolean equipRangedWeapon() {
+        if (isRangedWeapon(this.getMainHandItem())) return true;
+        for (int i = 0; i < inventory.getContainerSize(); i++) {
+            ItemStack stack = inventory.getItem(i);
+            if (isRangedWeapon(stack)) {
+                ItemStack hand = this.getMainHandItem().copy();
+                this.setItemSlot(EquipmentSlot.MAINHAND, stack.copy());
+                inventory.setItem(i, hand);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // ---- Fishing helpers ----
+
+    public boolean hasFishingRod() {
+        if (this.getMainHandItem().getItem() instanceof FishingRodItem) return true;
+        for (int i = 0; i < inventory.getContainerSize(); i++) {
+            if (inventory.getItem(i).getItem() instanceof FishingRodItem) return true;
+        }
+        return false;
+    }
+
+    public boolean equipFishingRod() {
+        if (this.getMainHandItem().getItem() instanceof FishingRodItem) return true;
+        for (int i = 0; i < inventory.getContainerSize(); i++) {
+            ItemStack stack = inventory.getItem(i);
+            if (stack.getItem() instanceof FishingRodItem) {
+                ItemStack hand = this.getMainHandItem().copy();
+                this.setItemSlot(EquipmentSlot.MAINHAND, stack.copy());
+                inventory.setItem(i, hand);
+                return true;
+            }
+        }
+        return false;
+    }
+
     // ---- Mining and Tool helpers ----
+
+    public boolean isAxe(ItemStack stack) {
+        return !stack.isEmpty() && stack.is(ItemTags.AXES);
+    }
+
+    public boolean hasAxe() {
+        if (isAxe(this.getMainHandItem())) return true;
+        for (int i = 0; i < inventory.getContainerSize(); i++) {
+            if (isAxe(inventory.getItem(i))) return true;
+        }
+        return false;
+    }
+
+    public boolean equipAxe() {
+        if (isAxe(this.getMainHandItem())) return true;
+        for (int i = 0; i < inventory.getContainerSize(); i++) {
+            ItemStack stack = inventory.getItem(i);
+            if (isAxe(stack)) {
+                ItemStack hand = this.getMainHandItem().copy();
+                this.setItemSlot(EquipmentSlot.MAINHAND, stack.copy());
+                inventory.setItem(i, hand);
+                return true;
+            }
+        }
+        return false;
+    }
 
     public boolean isPickaxe(ItemStack stack) {
         return !stack.isEmpty() && stack.is(ItemTags.PICKAXES);
@@ -448,8 +662,10 @@ public class FriendEntity extends PathfinderMob {
                 this.setItemSlot(slot, ItemStack.EMPTY);
             }
         }
-        // Drop a Friendship Stone
-        this.spawnAtLocation(level, new ItemStack(ModItems.FRIENDSHIP_STONE));
+        // 5% chance to drop a Friendship Stone
+        if (this.random.nextFloat() < 0.05f) {
+            this.spawnAtLocation(level, new ItemStack(ModItems.FRIENDSHIP_STONE));
+        }
         super.dropAllDeathLoot(level, damageSource);
     }
 
@@ -461,6 +677,13 @@ public class FriendEntity extends PathfinderMob {
     @Override
     public boolean canBeLeashed() {
         return !this.isLeashed();
+    }
+
+    // ---- Riding Support ----
+
+    @Override
+    protected boolean canAddPassenger(Entity passenger) {
+        return this.getPassengers().isEmpty();
     }
 
     // ---- Texture System ----

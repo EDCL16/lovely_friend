@@ -34,6 +34,7 @@ public class ExploreGoal extends Goal {
     @Override
     public boolean canUse() {
         if (cooldown-- > 0) return false;
+        if (entity.isLeashed()) return false;
         if (!(entity.level() instanceof ServerLevel serverLevel)) return false;
         if (entity.isVehicle()) return false;
         if (entity.getTarget() != null) return false;

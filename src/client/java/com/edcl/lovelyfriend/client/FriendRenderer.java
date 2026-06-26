@@ -6,6 +6,7 @@ import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.ModelLayers;
 import net.minecraft.client.renderer.entity.ArmorModelSet;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
+import net.minecraft.client.renderer.entity.HumanoidMobRenderer;
 import net.minecraft.client.renderer.entity.MobRenderer;
 import net.minecraft.client.renderer.entity.layers.HumanoidArmorLayer;
 import net.minecraft.client.renderer.entity.layers.ItemInHandLayer;
@@ -42,5 +43,6 @@ public class FriendRenderer extends MobRenderer<FriendEntity, FriendEntityRender
         state.selectedTexture = entity.getSelectedTexture();
         state.currentGoal = entity.getCurrentGoalDisplay();
         ArmedEntityRenderState.extractArmedEntityRenderState(entity, state, this.itemModelResolver, tickProgress);
+        HumanoidMobRenderer.extractHumanoidRenderState(entity, state, tickProgress, this.itemModelResolver);
     }
 }
