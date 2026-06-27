@@ -16,6 +16,8 @@ import com.edcl.lovelyfriend.entity.goal.PlaceBlockToClimbGoal;
 import com.edcl.lovelyfriend.entity.goal.CollectItemOnGroundGoal;
 import com.edcl.lovelyfriend.entity.goal.BuildNetherPortalGoal;
 import com.edcl.lovelyfriend.entity.goal.ContemplateLifeGoal;
+import com.edcl.lovelyfriend.entity.goal.FindNetherFortressGoal;
+import com.edcl.lovelyfriend.entity.goal.KillBlazeGoal;
 import com.edcl.lovelyfriend.entity.goal.EatFoodGoal;
 import com.edcl.lovelyfriend.entity.goal.EquipBestToolGoal;
 import com.edcl.lovelyfriend.entity.goal.ExploreGoal;
@@ -193,6 +195,7 @@ public class FriendEntity extends PathfinderMob implements RangedAttackMob {
         this.goalSelector.addGoal(3, new MineDiamondGoal(this));
         this.goalSelector.addGoal(3, new SmeltOreGoal(this));
         this.goalSelector.addGoal(3, new BuildNetherPortalGoal(this));
+        this.goalSelector.addGoal(3, new FindNetherFortressGoal(this));
 
         // 3.5: 自主行為 (狩獵、種植、砍樹)
         this.goalSelector.addGoal(3, new HuntLivestockGoal(this));
@@ -274,6 +277,7 @@ public class FriendEntity extends PathfinderMob implements RangedAttackMob {
         });
         this.goalSelector.addGoal(8, new RandomLookAroundGoal(this));
 
+        this.targetSelector.addGoal(1, new KillBlazeGoal(this));
         this.targetSelector.addGoal(2, new HurtByTargetGoal(this));
         this.targetSelector.addGoal(3, new NearestAttackableTargetGoal<>(this, Monster.class, 10, true, true,
                 (entity, level) -> !(entity instanceof Creeper)));
