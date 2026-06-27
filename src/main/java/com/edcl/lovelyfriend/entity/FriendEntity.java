@@ -14,6 +14,7 @@ import com.edcl.lovelyfriend.entity.goal.ExtinguishFireGoal;
 import com.edcl.lovelyfriend.entity.goal.FishingGoal;
 import com.edcl.lovelyfriend.entity.goal.PlaceBlockToClimbGoal;
 import com.edcl.lovelyfriend.entity.goal.CollectItemOnGroundGoal;
+import com.edcl.lovelyfriend.entity.goal.BuildNetherPortalGoal;
 import com.edcl.lovelyfriend.entity.goal.ContemplateLifeGoal;
 import com.edcl.lovelyfriend.entity.goal.EatFoodGoal;
 import com.edcl.lovelyfriend.entity.goal.EquipBestToolGoal;
@@ -191,6 +192,7 @@ public class FriendEntity extends PathfinderMob implements RangedAttackMob {
         this.goalSelector.addGoal(3, new MineIronGoal(this));
         this.goalSelector.addGoal(3, new MineDiamondGoal(this));
         this.goalSelector.addGoal(3, new SmeltOreGoal(this));
+        this.goalSelector.addGoal(3, new BuildNetherPortalGoal(this));
 
         // 3.5: 自主行為 (狩獵、種植、砍樹)
         this.goalSelector.addGoal(3, new HuntLivestockGoal(this));
