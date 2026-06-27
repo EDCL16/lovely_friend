@@ -27,6 +27,7 @@ public class HuntLivestockGoal extends Goal {
             cooldown--;
             return false;
         }
+        if (entity.getGameStage().ordinal() < com.edcl.lovelyfriend.entity.GameStage.IRON.ordinal()) return false;
         if (entity.isVehicle()) return false;
         if (entity.getTarget() != null) return false;
         if (!entity.isHungry()) return false;

@@ -31,6 +31,7 @@ public class BreedFriendGoal extends Goal {
     @Override
     public boolean canUse() {
         if (cooldown-- > 0) return false;
+        if (entity.getGameStage() != com.edcl.lovelyfriend.entity.GameStage.POST_GAME) return false;
         if (entity.isPassenger() || entity.isVehicle()) return false;
         if (entity.getTarget() != null) return false;
         if (entity.isBreedingOnCooldown()) return false;

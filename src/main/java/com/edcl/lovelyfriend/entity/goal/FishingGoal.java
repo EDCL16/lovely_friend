@@ -36,6 +36,7 @@ public class FishingGoal extends Goal {
     @Override
     public boolean canUse() {
         if (cooldown-- > 0) return false;
+        if (entity.getGameStage().ordinal() < com.edcl.lovelyfriend.entity.GameStage.IRON.ordinal()) return false;
         if (!entity.hasFishingRod()) return false;
         if (entity.isPassenger()) return false;
         if (entity.getTarget() != null) return false;

@@ -34,6 +34,9 @@ public class ExploreGoal extends Goal {
     @Override
     public boolean canUse() {
         if (cooldown-- > 0) return false;
+        com.edcl.lovelyfriend.entity.GameStage s = entity.getGameStage();
+        if (s == com.edcl.lovelyfriend.entity.GameStage.WOOD) return false;
+        if (s == com.edcl.lovelyfriend.entity.GameStage.POST_GAME) return false;
         if (entity.isLeashed()) return false;
         if (!(entity.level() instanceof ServerLevel serverLevel)) return false;
         if (entity.isVehicle()) return false;

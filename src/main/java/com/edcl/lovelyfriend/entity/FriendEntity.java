@@ -1,6 +1,7 @@
 package com.edcl.lovelyfriend.entity;
 
 import com.edcl.lovelyfriend.entity.goal.BreakBlockGoal;
+import com.edcl.lovelyfriend.entity.goal.StageAdvancerGoal;
 import com.edcl.lovelyfriend.entity.goal.BreedFriendGoal;
 import com.edcl.lovelyfriend.entity.goal.ChopTreeGoal;
 import com.edcl.lovelyfriend.entity.goal.CraftWoodenToolsGoal;
@@ -170,6 +171,7 @@ public class FriendEntity extends PathfinderMob implements RangedAttackMob {
     @Override
     protected void registerGoals() {
         // 0: 核心本能 / 狀態改變 (避免淹死、吃食物、裝備工具、尋找食物)
+        this.goalSelector.addGoal(0, new StageAdvancerGoal(this));
         this.goalSelector.addGoal(0, new FloatGoal(this));
         this.goalSelector.addGoal(0, new EatFoodGoal(this));
         this.goalSelector.addGoal(0, new EquipBestToolGoal(this));
@@ -219,9 +221,21 @@ public class FriendEntity extends PathfinderMob implements RangedAttackMob {
         // 4: 環境互動 / 搜刮 (破壞方塊、釣魚、分享裝備/盔甲/食物、栓繩套動物)
         this.goalSelector.addGoal(4, new BreakBlockGoal(this));
         this.goalSelector.addGoal(4, new FishingGoal(this));
-        this.goalSelector.addGoal(4, new ShareWeaponGoal(this));
-        this.goalSelector.addGoal(4, new ShareArmorGoal(this));
-        this.goalSelector.addGoal(4, new ShareFoodGoal(this));
+        this.goalSelector.addGoal(2, new ShareWeaponGoal(this) {
+            @Override public boolean canUse() {
+                return FriendEntity.this.getPlayMode() == PlayMode.COMPANION && super.canUse();
+            }
+        });
+        this.goalSelector.addGoal(2, new ShareArmorGoal(this) {
+            @Override public boolean canUse() {
+                return FriendEntity.this.getPlayMode() == PlayMode.COMPANION && super.canUse();
+            }
+        });
+        this.goalSelector.addGoal(2, new ShareFoodGoal(this) {
+            @Override public boolean canUse() {
+                return FriendEntity.this.getPlayMode() == PlayMode.COMPANION && super.canUse();
+            }
+        });
         this.goalSelector.addGoal(4, new LeashMobGoal(this));
 
         // 5: 自主生活 / 閒逛 (繁殖、村莊徘徊、隨機走動、探索新生態域)
@@ -243,7 +257,11 @@ public class FriendEntity extends PathfinderMob implements RangedAttackMob {
 
         this.goalSelector.addGoal(6, new LookAtPlayerGoal(this, Player.class, 8.0f));
         this.goalSelector.addGoal(6, new LookAtPlayerGoal(this, FriendEntity.class, 8.0f));
-        this.goalSelector.addGoal(7, new FollowPlayerGoal(this, 0.5, 20.0, 3.0));
+        this.goalSelector.addGoal(3, new FollowPlayerGoal(this, 0.5, 20.0, 3.0) {
+            @Override public boolean canUse() {
+                return FriendEntity.this.getPlayMode() == PlayMode.COMPANION && super.canUse();
+            }
+        });
         this.goalSelector.addGoal(8, new RandomLookAroundGoal(this));
 
         this.targetSelector.addGoal(2, new HurtByTargetGoal(this));

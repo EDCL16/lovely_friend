@@ -6,20 +6,24 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.ai.goal.Goal;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.EnumSet;
 
 public class ChopTreeGoal extends Goal {
 
     private static final int  SEARCH_RADIUS  = 14;
-    private static final int  CHOP_WITH_AXE  = 25;
-    private static final int  CHOP_BY_HAND   = 80;
-    private static final int  MAX_LOGS       = 20;
+
+    // 錯誤工具/空手懲罰（同 DiggingEscapeGoal）
+    private static final float WRONG_TOOL_PENALTY    = 3.333f;
+    private static final float TOOL_REQUIRED_PENALTY = 5.0f;
 
     private final FriendEntity entity;
     private BlockPos chopTarget;
     private int chopTimer;
-    private int chopDuration;
+    private int chopDuration;   // 改為動態計算
     private int cooldown;
     private boolean usedAxe;
 
@@ -31,8 +35,14 @@ public class ChopTreeGoal extends Goal {
     @Override
     public boolean canUse() {
         if (cooldown-- > 0) return false;
+        // ChopTreeGoal only active during WOOD, STONE, HOME_BUILDING
+        com.edcl.lovelyfriend.entity.GameStage stage = entity.getGameStage();
+        if (stage != com.edcl.lovelyfriend.entity.GameStage.WOOD
+         && stage != com.edcl.lovelyfriend.entity.GameStage.STONE
+         && stage != com.edcl.lovelyfriend.entity.GameStage.HOME_BUILDING) return false;
         if (entity.getTarget() != null) return false;
-        if (countLogs() >= MAX_LOGS) return false;
+        if (entity.isVehicle()) return false;
+
         chopTarget = findLog();
         return chopTarget != null;
     }
@@ -40,15 +50,29 @@ public class ChopTreeGoal extends Goal {
     @Override
     public boolean canContinueToUse() {
         if (entity.getTarget() != null) return false;
-        if (countLogs() >= MAX_LOGS) return false;
-        return chopTarget != null && entity.level().getBlockState(chopTarget).is(BlockTags.LOGS);
+        if (entity.isVehicle()) return false;
+
+        // 繼續砍，直到附近真的沒木頭了
+        if (chopTarget == null) return false;
+        if (!entity.level().getBlockState(chopTarget).is(BlockTags.LOGS)) {
+            // 當前方塊沒了 → 找下一根
+            BlockPos next = findLog();
+            if (next != null) {
+                chopTarget = next;
+                return true;
+            }
+            return false;
+        }
+        return true;
     }
 
     @Override
     public void start() {
         chopTimer = 0;
         usedAxe = entity.equipAxe();
-        chopDuration = usedAxe ? CHOP_WITH_AXE : CHOP_BY_HAND;
+
+        // 使用真實挖掘公式計算所需時間
+        chopDuration = calculateChopTicks(chopTarget);
         navigateTo(chopTarget);
     }
 
@@ -58,7 +82,7 @@ public class ChopTreeGoal extends Goal {
         if (usedAxe) entity.restoreWeapon();
         entity.getNavigation().stop();
         chopTarget = null;
-        cooldown = 80;
+        cooldown = 30; // 短冷卻，很快就會繼續砍下一根
     }
 
     @Override
@@ -74,9 +98,13 @@ public class ChopTreeGoal extends Goal {
             if (entity.level().getBlockState(above).is(BlockTags.LOGS)) {
                 chopTarget = above;
                 chopTimer = 0;
+                chopDuration = calculateChopTicks(chopTarget);
             } else {
                 chopTarget = findLog();
                 chopTimer = 0;
+                if (chopTarget != null) {
+                    chopDuration = calculateChopTicks(chopTarget);
+                }
             }
             if (chopTarget != null) navigateTo(chopTarget);
             return;
@@ -101,6 +129,19 @@ public class ChopTreeGoal extends Goal {
             clearProgress();
             entity.level().destroyBlock(chopTarget, true, entity);
             chopTimer = 0;
+
+            // 砍完一根後立刻找下一根，不要停！
+            BlockPos above = chopTarget.above();
+            if (entity.level().getBlockState(above).is(BlockTags.LOGS)) {
+                chopTarget = above;
+                chopDuration = calculateChopTicks(chopTarget);
+            } else {
+                chopTarget = findLog();
+                if (chopTarget != null) {
+                    chopDuration = calculateChopTicks(chopTarget);
+                }
+            }
+            if (chopTarget != null) navigateTo(chopTarget);
         }
     }
 
@@ -113,6 +154,50 @@ public class ChopTreeGoal extends Goal {
         if (chopTarget != null && entity.level() instanceof ServerLevel sl) {
             sl.destroyBlockProgress(entity.getId(), chopTarget, -1);
         }
+    }
+
+    /**
+     * 使用真實 Minecraft 挖掘公式計算砍樹 ticks
+     * 同 DiggingEscapeGoal.calculateDigTicks()
+     */
+    private int calculateChopTicks(BlockPos pos) {
+        if (pos == null) return 40;
+
+        Level level = entity.level();
+        BlockState state = level.getBlockState(pos);
+        float hardness = state.getDestroySpeed(level, pos);
+
+        if (hardness < 0) return 999;
+        if (hardness == 0) return 2;
+
+        ItemStack tool = entity.getMainHandItem();
+        float speed;
+
+        if (tool.isEmpty()) {
+            speed = 1.0f;
+        } else {
+            float toolSpeed = tool.getDestroySpeed(state);
+            if (toolSpeed > 1.0f) {
+                // 工具對木頭有效（斧頭），speed 取決於材質：
+                //   木斧=2.0, 石斧=4.0, 鐵斧=6.0, 鑽斧=8.0, 獄髓斧=9.0, 金斧=12.0
+                speed = toolSpeed;
+            } else {
+                // 用錯工具（如鎬子砍樹）
+                speed = 1.0f;
+                if (!tool.isCorrectToolForDrops(state) && state.requiresCorrectToolForDrops()) {
+                    speed = 1.0f / TOOL_REQUIRED_PENALTY;
+                }
+            }
+        }
+
+        // 空手砍樹：原版斧頭對原木才有效，空手 5x 懲罰
+        if (tool.isEmpty() && state.requiresCorrectToolForDrops()) {
+            speed = 1.0f / TOOL_REQUIRED_PENALTY;
+        }
+
+        float timeInSeconds = hardness * 1.5f / speed;
+        int ticks = Math.max(1, (int) Math.ceil(timeInSeconds * 20.0f));
+        return Math.min(ticks, 6000);
     }
 
     private BlockPos findLog() {
@@ -133,17 +218,5 @@ public class ChopTreeGoal extends Goal {
             }
         }
         return best;
-    }
-
-    private int countLogs() {
-        int n = 0;
-        for (int i = 0; i < entity.getInventory().getContainerSize(); i++) {
-            var s = entity.getInventory().getItem(i);
-            if (!s.isEmpty() && s.getItem() instanceof net.minecraft.world.item.BlockItem bi
-                    && bi.getBlock().defaultBlockState().is(BlockTags.LOGS)) {
-                n += s.getCount();
-            }
-        }
-        return n;
     }
 }
