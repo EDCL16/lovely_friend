@@ -83,12 +83,16 @@ public class BuildNetherPortalGoal extends Goal {
                 return;
             }
             entity.getNavigation().stop();
-            if (entity.level().getBlockState(pos).isAir()
-                    || entity.level().getBlockState(pos).canBeReplaced()) {
+            net.minecraft.world.level.block.state.BlockState existing = entity.level().getBlockState(pos);
+            if (existing.isAir() || existing.canBeReplaced()) {
                 sl.setBlock(pos, Blocks.OBSIDIAN.defaultBlockState(), 3);
                 removeObsidianFromInventory();
+                buildIndex++;
+            } else if (existing.is(Blocks.OBSIDIAN)) {
+                // Already obsidian (maybe placed earlier or by player) — count it and move on
+                buildIndex++;
             }
-            buildIndex++;
+            // else: occupied by something else — navigate around it, retry next tick without advancing
         }
 
         if (lighting) {
