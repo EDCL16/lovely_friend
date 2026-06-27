@@ -9,6 +9,7 @@ import com.edcl.lovelyfriend.entity.goal.ExtinguishFireGoal;
 import com.edcl.lovelyfriend.entity.goal.FishingGoal;
 import com.edcl.lovelyfriend.entity.goal.PlaceBlockToClimbGoal;
 import com.edcl.lovelyfriend.entity.goal.CollectItemOnGroundGoal;
+import com.edcl.lovelyfriend.entity.goal.ContemplateLifeGoal;
 import com.edcl.lovelyfriend.entity.goal.EatFoodGoal;
 import com.edcl.lovelyfriend.entity.goal.EquipBestToolGoal;
 import com.edcl.lovelyfriend.entity.goal.ExploreGoal;
@@ -90,9 +91,26 @@ public class FriendEntity extends PathfinderMob implements RangedAttackMob {
     private String lastGoalName = "";
     private int breedCooldown = 0;
     private int regenTimer = 0;
+    private GameStage gameStage = GameStage.WOOD;
+    @Nullable private BlockPos homePos;
+    private PlayMode playMode = PlayMode.AUTONOMOUS;
+    private int playModeCheckTimer = 0;
+    private boolean endPortalActivated = false;
 
     public boolean isBreedingOnCooldown() { return breedCooldown > 0; }
     public void setBreedCooldown(int ticks) { breedCooldown = ticks; }
+
+    public GameStage getGameStage() { return gameStage; }
+    public PlayMode getPlayMode() { return playMode; }
+    @Nullable public BlockPos getHomePos() { return homePos; }
+    public void setHomePos(BlockPos pos) { this.homePos = pos; }
+
+    public void advanceStage() {
+        gameStage = gameStage.next();
+    }
+
+    public boolean isEndPortalActivated() { return endPortalActivated; }
+    public void setEndPortalActivated(boolean v) { this.endPortalActivated = v; }
 
     private static final List<String> TEXTURES = Arrays.asList(
             "entity/female/1",  "entity/female/2",  "entity/female/3",  "entity/female/4",
@@ -221,6 +239,7 @@ public class FriendEntity extends PathfinderMob implements RangedAttackMob {
             }
         });
         this.goalSelector.addGoal(5, new ExploreGoal(this));
+        this.goalSelector.addGoal(5, new ContemplateLifeGoal(this));
 
         this.goalSelector.addGoal(6, new LookAtPlayerGoal(this, Player.class, 8.0f));
         this.goalSelector.addGoal(6, new LookAtPlayerGoal(this, FriendEntity.class, 8.0f));
@@ -244,6 +263,11 @@ public class FriendEntity extends PathfinderMob implements RangedAttackMob {
             applyNaturalRegen();
             updateCurrentGoalDisplay();
             if (breedCooldown > 0) breedCooldown--;
+            if (++playModeCheckTimer >= 100) {
+                playModeCheckTimer = 0;
+                boolean playerNearby = this.level().getNearestPlayer(this, 32) != null;
+                playMode = playerNearby ? PlayMode.COMPANION : PlayMode.AUTONOMOUS;
+            }
         }
     }
 
@@ -255,15 +279,15 @@ public class FriendEntity extends PathfinderMob implements RangedAttackMob {
         String newGoal = getActiveGoalName();
         if (!newGoal.equals(lastGoalName)) {
             lastGoalName = newGoal;
-            this.getEntityData().set(CURRENT_GOAL, newGoal);
+            this.getEntityData().set(CURRENT_GOAL, "[" + gameStage.name() + "] " + newGoal);
         }
     }
 
     public String getActiveGoalName() {
-        // Note: full goal detection requires more complex tracking
-        // This is a simplified version that returns the last updated goal
-        String goal = this.getCurrentGoalDisplay();
-        return goal.isEmpty() ? "Idle" : goal;
+        // Note: full goal detection requires more complex tracking.
+        // Returns lastGoalName (the raw goal without stage prefix) or "Idle".
+        // Future tasks will replace this with actual goal-selector inspection.
+        return lastGoalName.isEmpty() ? "Idle" : lastGoalName;
     }
 
     public String getCurrentGoalDisplay() {
@@ -715,6 +739,11 @@ public class FriendEntity extends PathfinderMob implements RangedAttackMob {
         super.addAdditionalSaveData(output);
         output.putString("SelectedTexture", this.getEntityData().get(TEXTURE_ID));
         output.putInt("FoodLevel", foodLevel);
+        output.putString("GameStage", gameStage.name());
+        if (homePos != null) {
+            output.store("HomePos", BlockPos.CODEC, homePos);
+        }
+        output.putBoolean("EndPortalActivated", endPortalActivated);
 
         ValueOutput.ValueOutputList inventoryList = output.childrenList("Inventory");
         for (int i = 0; i < inventory.getContainerSize(); i++) {
@@ -736,6 +765,13 @@ public class FriendEntity extends PathfinderMob implements RangedAttackMob {
         }
         this.getEntityData().set(TEXTURE_ID, tex);
         foodLevel = input.getIntOr("FoodLevel", MAX_FOOD_LEVEL);
+        try {
+            gameStage = GameStage.valueOf(input.getStringOr("GameStage", "WOOD"));
+        } catch (IllegalArgumentException e) {
+            gameStage = GameStage.WOOD;
+        }
+        input.read("HomePos", BlockPos.CODEC).ifPresent(pos -> homePos = pos);
+        endPortalActivated = input.getBooleanOr("EndPortalActivated", false);
 
         ValueInput.ValueInputList inventoryList = input.childrenListOrEmpty("Inventory");
         for (ValueInput child : inventoryList) {
