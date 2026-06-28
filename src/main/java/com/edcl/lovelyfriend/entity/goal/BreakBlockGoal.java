@@ -20,8 +20,10 @@ public class BreakBlockGoal extends Goal {
 
     private static final int SEARCH_RADIUS = 16;
     private static final int SEARCH_RANGE_Y = 5;
-    private static final int BASE_BREAK_TICKS = 40;
-    private static final float TOOL_SPEED_MULTIPLIER = 1.5f;
+
+    // 錯誤工具/空手懲罰（同 DiggingEscapeGoal）
+    private static final float WRONG_TOOL_PENALTY    = 3.333f;
+    private static final float TOOL_REQUIRED_PENALTY = 5.0f;
 
     private final FriendEntity entity;
     private BlockPos target;
@@ -39,23 +41,27 @@ public class BreakBlockGoal extends Goal {
     public boolean canUse() {
         if (cooldown-- > 0) return false;
         if (entity.isVehicle()) return false;
-        if (!entity.hasPickaxe()) return false;
         if (entity.getY() > 60) return false;
         if (entity.getRandom().nextFloat() > 0.03f) return false; // 3% chance
-        return true;
+
+        // ✅ 不再要求一定要有鎬子！
+        // 沒鎬子 → 徒手挖（超慢）→ 過程中自然會去砍木頭做工具
+
+        target = findBestOreTarget();
+        return target != null;
     }
 
     @Override
     public boolean canContinueToUse() {
         if (target == null) return false;
-        if (!entity.hasPickaxe()) return false;
+        // 即使鎬子用壞了也可以繼續（用其他工具或空手）
         return true;
     }
 
     @Override
     public void start() {
         breakTick = 0;
-        usedPickaxe = entity.equipPickaxe();
+        usedPickaxe = entity.equipPickaxe(); // 有鎬就裝，沒有就空手
         requiredBreakTicks = getRequiredBreakTicks();
         if (target != null) {
             entity.getNavigation().moveTo(target.getX() + 0.5, target.getY(), target.getZ() + 0.5, 1.0);
@@ -64,6 +70,7 @@ public class BreakBlockGoal extends Goal {
 
     @Override
     public void stop() {
+        entity.setMidBlockBreak(false);
         clearProgress();
         if (usedPickaxe) {
             entity.restoreWeapon();
@@ -85,6 +92,8 @@ public class BreakBlockGoal extends Goal {
         }
 
         entity.getNavigation().stop();
+        entity.setMidBlockBreak(true);
+        entity.setTarget(null); // suppress combat interruption while mid-block
 
         breakTick++;
         if (entity.level() instanceof ServerLevel sl) {
@@ -105,34 +114,44 @@ public class BreakBlockGoal extends Goal {
         }
     }
 
+    /**
+     * 使用真實 Minecraft 挖掘公式計算所需 ticks
+     * 同 DiggingEscapeGoal.calculateDigTicks()
+     */
     private int getRequiredBreakTicks() {
-        if (target == null) return BASE_BREAK_TICKS;
+        if (target == null) return 40;
 
         Level level = entity.level();
         BlockState state = level.getBlockState(target);
         float hardness = state.getDestroySpeed(level, target);
-        if (hardness < 0) return BASE_BREAK_TICKS;
+
+        if (hardness < 0) return 999;
+        if (hardness == 0) return 2;
 
         ItemStack tool = entity.getMainHandItem();
-        float speed = 1.0f;
+        float speed;
 
-        if (!tool.isEmpty()) {
-            speed = tool.getDestroySpeed(state);
-            if (speed > 1.0f) {
-                speed *= TOOL_SPEED_MULTIPLIER;
+        if (tool.isEmpty()) {
+            speed = 1.0f;
+        } else {
+            float toolSpeed = tool.getDestroySpeed(state);
+            if (toolSpeed > 1.0f) {
+                speed = toolSpeed;
+            } else {
+                speed = 1.0f;
+                if (!tool.isCorrectToolForDrops(state) && state.requiresCorrectToolForDrops()) {
+                    speed = 1.0f / TOOL_REQUIRED_PENALTY;
+                }
             }
         }
 
-        boolean isCorrectTool = !tool.isEmpty() && tool.isCorrectToolForDrops(state);
-        if (!isCorrectTool) {
-            speed = 1.0f;
+        if (tool.isEmpty() && state.requiresCorrectToolForDrops()) {
+            speed = 1.0f / TOOL_REQUIRED_PENALTY;
         }
 
-        float time = hardness * 1.5f / speed;
-        if (time < 0.1f) time = 0.1f;
-
-        int ticks = (int) (time * 20);
-        return Math.max(2, Math.min(ticks, 200));
+        float timeInSeconds = hardness * 1.5f / speed;
+        int ticks = Math.max(1, (int) Math.ceil(timeInSeconds * 20.0f));
+        return Math.min(ticks, 6000);
     }
 
     private BlockPos findBestOreTarget() {

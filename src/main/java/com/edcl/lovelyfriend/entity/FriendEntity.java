@@ -18,6 +18,11 @@ import com.edcl.lovelyfriend.entity.goal.BuildNetherPortalGoal;
 import com.edcl.lovelyfriend.entity.goal.ContemplateLifeGoal;
 import com.edcl.lovelyfriend.entity.goal.FindNetherFortressGoal;
 import com.edcl.lovelyfriend.entity.goal.KillBlazeGoal;
+import com.edcl.lovelyfriend.entity.goal.CraftEyeOfEnderGoal;
+import com.edcl.lovelyfriend.entity.goal.FindStrongholdGoal;
+import com.edcl.lovelyfriend.entity.goal.ActivateEndPortalGoal;
+import com.edcl.lovelyfriend.entity.goal.KillEnderDragonGoal;
+import com.edcl.lovelyfriend.entity.goal.BuildHomeGoal;
 import com.edcl.lovelyfriend.entity.goal.EatFoodGoal;
 import com.edcl.lovelyfriend.entity.goal.EquipBestToolGoal;
 import com.edcl.lovelyfriend.entity.goal.ExploreGoal;
@@ -104,6 +109,10 @@ public class FriendEntity extends PathfinderMob implements RangedAttackMob {
     private PlayMode playMode = PlayMode.AUTONOMOUS;
     private int playModeCheckTimer = 0;
     private boolean endPortalActivated = false;
+    private boolean midBlockBreak = false;
+
+    public boolean isMidBlockBreak() { return midBlockBreak; }
+    public void setMidBlockBreak(boolean v) { midBlockBreak = v; }
 
     public boolean isBreedingOnCooldown() { return breedCooldown > 0; }
     public void setBreedCooldown(int ticks) { breedCooldown = ticks; }
@@ -196,6 +205,10 @@ public class FriendEntity extends PathfinderMob implements RangedAttackMob {
         this.goalSelector.addGoal(3, new SmeltOreGoal(this));
         this.goalSelector.addGoal(3, new BuildNetherPortalGoal(this));
         this.goalSelector.addGoal(3, new FindNetherFortressGoal(this));
+        this.goalSelector.addGoal(3, new CraftEyeOfEnderGoal(this));
+        this.goalSelector.addGoal(3, new ActivateEndPortalGoal(this));
+        this.goalSelector.addGoal(3, new FindStrongholdGoal(this));
+        this.goalSelector.addGoal(3, new BuildHomeGoal(this));
 
         // 3.5: 自主行為 (狩獵、種植、砍樹)
         this.goalSelector.addGoal(3, new HuntLivestockGoal(this));
@@ -227,7 +240,12 @@ public class FriendEntity extends PathfinderMob implements RangedAttackMob {
                 super.stop();
             }
         });
-        this.goalSelector.addGoal(2, new MeleeAttackGoal(this, 1.0, true));
+        this.goalSelector.addGoal(2, new MeleeAttackGoal(this, 1.0, true) {
+            @Override public void start() {
+                FriendEntity.this.restoreWeapon();
+                super.start();
+            }
+        });
         this.goalSelector.addGoal(2, new MoveTowardsTargetGoal(this, 1.0, 32.0f));
 
 
@@ -278,10 +296,32 @@ public class FriendEntity extends PathfinderMob implements RangedAttackMob {
         this.goalSelector.addGoal(8, new RandomLookAroundGoal(this));
 
         this.targetSelector.addGoal(1, new KillBlazeGoal(this));
-        this.targetSelector.addGoal(2, new HurtByTargetGoal(this));
+        this.targetSelector.addGoal(1, new KillEnderDragonGoal(this));
+        this.targetSelector.addGoal(2, new HurtByTargetGoal(this) {
+            @Override public boolean canUse() {
+                return !FriendEntity.this.isMidBlockBreak() && super.canUse();
+            }
+            @Override public boolean canContinueToUse() {
+                return !FriendEntity.this.isMidBlockBreak() && super.canContinueToUse();
+            }
+        });
         this.targetSelector.addGoal(3, new NearestAttackableTargetGoal<>(this, Monster.class, 10, true, true,
-                (entity, level) -> !(entity instanceof Creeper)));
-        this.targetSelector.addGoal(3, new NearestAttackableTargetGoal<>(this, Animal.class, true));
+                (entity, level) -> !(entity instanceof Creeper)) {
+            @Override public boolean canUse() {
+                return !FriendEntity.this.isMidBlockBreak() && super.canUse();
+            }
+            @Override public boolean canContinueToUse() {
+                return !FriendEntity.this.isMidBlockBreak() && super.canContinueToUse();
+            }
+        });
+        this.targetSelector.addGoal(3, new NearestAttackableTargetGoal<>(this, Animal.class, true) {
+            @Override public boolean canUse() {
+                return !FriendEntity.this.isMidBlockBreak() && super.canUse();
+            }
+            @Override public boolean canContinueToUse() {
+                return !FriendEntity.this.isMidBlockBreak() && super.canContinueToUse();
+            }
+        });
     }
 
     // ---- Hunger System ----
@@ -696,6 +736,12 @@ public class FriendEntity extends PathfinderMob implements RangedAttackMob {
             if (remaining.isEmpty()) {
                 this.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
             }
+        }
+
+        // Fallback: if still not holding a combat weapon, try ranged weapon
+        ItemStack now = this.getMainHandItem();
+        if (!isWeapon(now) && !isRangedWeapon(now)) {
+            equipRangedWeapon();
         }
     }
 

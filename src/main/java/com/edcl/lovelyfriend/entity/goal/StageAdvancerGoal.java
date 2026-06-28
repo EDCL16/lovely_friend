@@ -7,6 +7,7 @@ import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.Level;
 
 import java.util.EnumSet;
 
@@ -47,7 +48,10 @@ public class StageAdvancerGoal extends Goal {
             case STRONGHOLD   -> entity.isEndPortalActivated();
             case END          -> {
                 if (entity.level() instanceof ServerLevel sl) {
-                    var fight = sl.getDragonFight();
+                    // Check the End dimension directly — entity may be in overworld
+                    ServerLevel endLevel = sl.getServer().getLevel(Level.END);
+                    if (endLevel == null) yield false;
+                    var fight = endLevel.getDragonFight();
                     yield fight != null && fight.hasPreviouslyKilledDragon();
                 }
                 yield false;

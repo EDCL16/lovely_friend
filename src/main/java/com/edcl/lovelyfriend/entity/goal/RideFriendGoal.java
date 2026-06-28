@@ -10,12 +10,12 @@ import java.util.List;
 
 public class RideFriendGoal extends Goal {
 
-    private static final double SEARCH_RADIUS = 15.0;
-    private static final double RIDE_RANGE = 5.0;
+    private static final double SEARCH_RADIUS = 5.0;
+    private static final double RIDE_RANGE = 10.0;
     private static final int BOREDOM_THRESHOLD = 100;
     private static final int RIDE_DURATION = Integer.MAX_VALUE;
-    private static final int COOLDOWN_AFTER_RIDE = 600;
-    private static final int MAX_STACK = 5; // max chain height
+    private static final int COOLDOWN_AFTER_RIDE = 1000;
+    private static final int MAX_CHAIN_HEIGHT = 16; // max chain height
 
     private final FriendEntity entity;
     private FriendEntity targetFriend;
@@ -124,7 +124,7 @@ public class RideFriendGoal extends Goal {
             if (friend.isVehicle()) continue; // already has a rider — no doubling up
             if (isAbove(entity, friend)) continue; // prevent circular chain
             int h = stackHeight(friend);
-            if (h >= MAX_STACK) continue;
+            if (h >= MAX_CHAIN_HEIGHT) continue;
 
             double dist = entity.distanceToSqr(friend);
             // Prefer taller stacks (build upward); break ties by distance
